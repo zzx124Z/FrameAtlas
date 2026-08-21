@@ -74,15 +74,23 @@ def _run(arguments: argparse.Namespace, config: SamplingConfig) -> int:
         else:
             video, attempts, elapsed = _download_input(arguments, temporary_dir)
         started = time.perf_counter()
+        phase_started = time.perf_counter()
         metadata = _probe_video(video, arguments.backend)
+        probe_ms = round((time.perf_counter() - phase_started) * 1000)
         sheet_count = estimate_sheet_count(metadata.duration_ms, config.fps, config.slots_per_sheet)
         if sheet_count > 100:
             print(f"warning: this video will produce about {sheet_count} contact sheets", flush=True)
         frame_count = math.ceil(metadata.duration_ms * config.fps / 1000)
         timestamps = sampling_timestamps_ms(frame_count, config.fps)
+        phase_started = time.perf_counter()
         frames = _extract_frames(video, timestamps, temporary_dir / "frames", arguments.backend)
+        extract_ms = round((time.perf_counter() - phase_started) * 1000)
         video_id = _video_id(arguments.input)
+        phase_started = time.perf_counter()
         sheets = render_contact_sheets(frames, timestamps, config, video_id=video_id)
+        render_ms = round((time.perf_counter() - phase_started) * 1000)
+        timings = {"download_ms": elapsed, "download_attempts": attempts, "probe_ms": probe_ms, "extract_ms": extract_ms, "render_ms": render_ms}
+        phase_started = time.perf_counter()
         package = write_reference_package(
             arguments.output / video_id,
             video,
@@ -93,11 +101,16 @@ def _run(arguments: argparse.Namespace, config: SamplingConfig) -> int:
             duration_ms=metadata.duration_ms,
             width=metadata.width,
             height=metadata.height,
-            timings={"download_ms": elapsed, "download_attempts": attempts, "analysis_ms": round((time.perf_counter() - started) * 1000)},
+            timings={**timings, "write_ms": None},
             overwrite=arguments.overwrite,
         )
+        timings["write_ms"] = round((time.perf_counter() - phase_started) * 1000)
+        manifest_path = package / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["timings"] = {**timings, "analysis_ms": round((time.perf_counter() - started) * 1000)}
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     if arguments.timing:
-        print(json.dumps({"download_ms": elapsed, "download_attempts": attempts, "analysis_ms": round((time.perf_counter() - started) * 1000)}, indent=2))
+        print(json.dumps(manifest["timings"], indent=2))
     print(package)
     return 0
 
