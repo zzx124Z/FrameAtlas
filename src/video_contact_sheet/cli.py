@@ -3,6 +3,8 @@ import hashlib
 import math
 import re
 import tempfile
+import time
+import json
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -33,6 +35,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, default=Path("video-reference"), help="Output parent directory")
     parser.add_argument("--overwrite", action="store_true", help="Replace an existing package")
     parser.add_argument("--backend", choices=("opencv", "ffmpeg"), default="opencv", help="Video decoding backend; default: opencv")
+    parser.add_argument("--stage", choices=("all", "download", "analyze"), default="all", help="Pipeline stage; default: all")
+    parser.add_argument("--download-dir", type=Path, default=Path("video-downloads"), help="Persistent download directory")
+    parser.add_argument("--retry-preset", choices=("fast-fail", "balanced", "reliable"), default="balanced", help="URL download retry profile")
+    parser.add_argument("--format-profile", choices=("balanced", "small"), default="balanced", help="URL download format profile")
+    parser.add_argument("--timing", action="store_true", help="Print stage timings")
     parser.add_argument(
         "--parameter-source",
         choices=("explicit", "default"),
@@ -52,10 +59,21 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run(arguments: argparse.Namespace, config: SamplingConfig) -> int:
+    if arguments.stage == "download":
+        _require_tools(arguments.input, arguments.backend, download_only=True)
+        video, attempts, elapsed = _download_input(arguments)
+        result = {"video": str(video), "attempts": attempts, "elapsed_ms": elapsed}
+        print(json.dumps(result, indent=2))
+        return 0
     _require_tools(arguments.input, arguments.backend)
     with tempfile.TemporaryDirectory(prefix="video-contact-sheet-") as temporary:
         temporary_dir = Path(temporary)
-        video = _resolve_input(arguments.input, temporary_dir)
+        if arguments.stage == "analyze":
+            video = resolve_local_input(arguments.input)
+            attempts = elapsed = None
+        else:
+            video, attempts, elapsed = _download_input(arguments, temporary_dir)
+        started = time.perf_counter()
         metadata = _probe_video(video, arguments.backend)
         sheet_count = estimate_sheet_count(metadata.duration_ms, config.fps, config.slots_per_sheet)
         if sheet_count > 100:
@@ -75,8 +93,11 @@ def _run(arguments: argparse.Namespace, config: SamplingConfig) -> int:
             duration_ms=metadata.duration_ms,
             width=metadata.width,
             height=metadata.height,
+            timings={"download_ms": elapsed, "download_attempts": attempts, "analysis_ms": round((time.perf_counter() - started) * 1000)},
             overwrite=arguments.overwrite,
         )
+    if arguments.timing:
+        print(json.dumps({"download_ms": elapsed, "download_attempts": attempts, "analysis_ms": round((time.perf_counter() - started) * 1000)}, indent=2))
     print(package)
     return 0
 
@@ -85,8 +106,9 @@ def estimate_sheet_count(duration_ms: int, fps: int, slots_per_sheet: int) -> in
     return math.ceil(duration_ms * fps / (1000 * slots_per_sheet))
 
 
-def _require_tools(value: str, backend: str) -> None:
-    require_backend(backend)
+def _require_tools(value: str, backend: str, download_only: bool = False) -> None:
+    if not download_only:
+        require_backend(backend)
     if is_url(value):
         require_executable("yt-dlp")
 
@@ -95,6 +117,13 @@ def _resolve_input(value: str, temporary_dir: Path) -> Path:
     if is_url(value):
         return download_video(value, temporary_dir / "download")
     return resolve_local_input(value)
+
+
+def _download_input(arguments: argparse.Namespace, temporary_dir: Path | None = None) -> tuple[Path, int, int]:
+    destination = arguments.download_dir / _video_id(arguments.input) if temporary_dir is None else temporary_dir / "download"
+    if is_url(arguments.input):
+        return download_video(arguments.input, destination, arguments.retry_preset, arguments.format_profile)
+    return resolve_local_input(arguments.input), 0, 0
 
 
 def _probe_video(video: Path, backend: str):

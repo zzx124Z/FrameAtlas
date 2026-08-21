@@ -56,6 +56,17 @@ video-contact-sheet "https://example.com/video" --fps 1 --rows 3 --columns 3 --o
 
 The defaults are `1 fps` and `3x3`. Sheet count is `ceil(duration_seconds × fps ÷ (rows × columns))`. A 10-minute video at defaults produces `ceil(600 × 1 ÷ 9) = 67` sheets. Use the lowest density that can answer the question and open only time-range-relevant sheets.
 
+### Two-Stage Mode For Unreliable Networks
+
+For sources with separate audio/video streams or unstable CDN connections, download first and analyze locally to avoid repeating network work:
+
+```powershell
+video-contact-sheet "https://example.com/video" --stage download --download-dir video-downloads --retry-preset balanced
+video-contact-sheet "video-downloads/<video-id>/original.mp4" --stage analyze --output video-reference
+```
+
+`--retry-preset` supports `fast-fail`, `balanced` (default), and `reliable`; `--format-profile small` prefers a lower-bandwidth format. The download stage prints attempt information, and the analysis `manifest.json` records stage timings. The default `--stage all` remains available.
+
 ## Bilibili HTTP 412
 
 Compare `where.exe yt-dlp`, `yt-dlp --version`, `python -m pip show yt-dlp`, and `python -m yt_dlp --version`. A common cause is an outdated `yt-dlp.exe` on `PATH` while the newer package was installed into another Python environment; align versions and retry once. Never use BrowserUse, a built-in browser, Computer Use, cookies, forged headers, or proxy rotation to bypass platform controls.

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from video_contact_sheet.input_source import is_url, resolve_local_input
-from video_contact_sheet.media import MediaToolError, build_download_command, parse_probe_metadata, require_backend
+from video_contact_sheet.media import MediaToolError, RETRY_PRESETS, build_download_command, download_video, parse_probe_metadata, require_backend
 
 
 def test_resolves_existing_local_video(tmp_path: Path):
@@ -31,6 +31,33 @@ def test_builds_yt_dlp_command_without_shell_interpolation(tmp_path: Path):
 
     assert command[:3] == ["yt-dlp", "--no-playlist", "--output"]
     assert command[-1] == "https://example.test/video?a=1&b=2"
+
+
+def test_download_command_contains_network_controls(tmp_path: Path):
+    command = build_download_command("https://example.test/video", tmp_path, RETRY_PRESETS["balanced"])
+    assert "--retries" in command
+    assert "--fragment-retries" in command
+    assert "--socket-timeout" in command
+
+
+def test_download_retries_and_writes_manifest(tmp_path: Path, monkeypatch):
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        if len(calls) == 2:
+            (tmp_path / "original.mp4").write_bytes(b"video")
+            return type("Result", (), {"returncode": 0, "stderr": ""})()
+        return type("Result", (), {"returncode": 1, "stderr": "bytes read, more expected"})()
+
+    monkeypatch.setattr("video_contact_sheet.media.require_executable", lambda name: None)
+    monkeypatch.setattr("video_contact_sheet.media.subprocess.run", fake_run)
+    video, attempts, elapsed = download_video("https://example.test/video", tmp_path, "balanced")
+
+    assert video.name == "original.mp4"
+    assert attempts == 2
+    assert elapsed >= 0
+    assert (tmp_path / "download-manifest.json").is_file()
 
 
 def test_parses_video_stream_metadata():

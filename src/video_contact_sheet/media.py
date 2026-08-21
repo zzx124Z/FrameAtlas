@@ -1,6 +1,7 @@
 import json
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,8 +17,33 @@ class VideoMetadata:
     height: int
 
 
-def build_download_command(url: str, destination: Path) -> list[str]:
-    return ["yt-dlp", "--no-playlist", "--output", str(destination / "original.%(ext)s"), url]
+@dataclass(frozen=True)
+class RetrySettings:
+    retries: int
+    fragment_retries: int
+    socket_timeout: int
+
+
+RETRY_PRESETS = {
+    "fast-fail": RetrySettings(1, 1, 10),
+    "balanced": RetrySettings(3, 5, 20),
+    "reliable": RetrySettings(5, 20, 30),
+}
+
+
+def build_download_command(url: str, destination: Path, settings: RetrySettings | None = None, format_profile: str = "balanced") -> list[str]:
+    settings = settings or RETRY_PRESETS["balanced"]
+    command = [
+        "yt-dlp", "--no-playlist", "--output", str(destination / "original.%(ext)s"),
+        "--retries", str(settings.retries), "--fragment-retries", str(settings.fragment_retries),
+        "--socket-timeout", str(settings.socket_timeout),
+    ]
+    if format_profile == "small":
+        command.extend(["--format", "bv*[height<=720]+ba/b[height<=720]/b"])
+    elif format_profile != "balanced":
+        raise ValueError(f"unsupported format profile: {format_profile}")
+    command.append(url)
+    return command
 
 
 def require_executable(name: str) -> None:
@@ -39,16 +65,29 @@ def require_backend(backend: str) -> None:
     raise MediaToolError(f"unsupported media backend: {backend}")
 
 
-def download_video(url: str, destination: Path) -> Path:
+def download_video(url: str, destination: Path, retry_preset: str = "balanced", format_profile: str = "balanced") -> tuple[Path, int, int]:
     require_executable("yt-dlp")
+    if retry_preset not in RETRY_PRESETS:
+        raise ValueError(f"unsupported retry preset: {retry_preset}")
     destination.mkdir(parents=True, exist_ok=True)
-    completed = subprocess.run(build_download_command(url, destination), capture_output=True, text=True)
-    if completed.returncode != 0:
-        raise MediaToolError(completed.stderr.strip() or "yt-dlp failed to download the video")
-    files = sorted(destination.glob("original.*"))
-    if len(files) != 1:
-        raise MediaToolError("yt-dlp did not produce exactly one original video")
-    return files[0]
+    started = time.perf_counter()
+    settings = RETRY_PRESETS[retry_preset]
+    errors = []
+    for attempt in range(1, 4):
+        for partial in destination.glob("original.*"):
+            partial.unlink()
+        print(f"download: attempt {attempt}/3, profile={format_profile}, retries={settings.retries}, fragment-retries={settings.fragment_retries}", flush=True)
+        completed = subprocess.run(build_download_command(url, destination, settings, format_profile), capture_output=True, text=True)
+        files = sorted(destination.glob("original.*"))
+        if completed.returncode == 0 and len(files) == 1:
+            elapsed_ms = round((time.perf_counter() - started) * 1000)
+            (destination / "download-manifest.json").write_text(
+                json.dumps({"input": url, "video": files[0].name, "attempts": attempt, "elapsed_ms": elapsed_ms, "retry_preset": retry_preset, "format_profile": format_profile}, indent=2),
+                encoding="utf-8",
+            )
+            return files[0], attempt, elapsed_ms
+        errors.append(completed.stderr.strip() or "yt-dlp did not produce exactly one original video")
+    raise MediaToolError(f"yt-dlp failed after 3 attempts: {errors[-1]}")
 
 
 def parse_probe_metadata(raw_metadata: str) -> VideoMetadata:

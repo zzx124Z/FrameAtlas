@@ -56,6 +56,17 @@ video-contact-sheet "https://example.com/video" --fps 1 --rows 3 --columns 3 --o
 
 默认参数是 `1 fps`、`3x3`。图片数量：`ceil(视频秒数 × 每秒帧数 ÷ (行数 × 列数))`。例如 10 分钟视频：`ceil(600 × 1 ÷ 9) = 67` 张联系表。优先使用能回答问题的最低抽帧密度，并只打开目标时间范围的联系表。
 
+### 不稳定网络的两阶段模式
+
+对 Bilibili 等分轨下载或 CDN 不稳定的来源，建议先下载、后分析，避免重复下载：
+
+```powershell
+video-contact-sheet "https://example.com/video" --stage download --download-dir video-downloads --retry-preset balanced
+video-contact-sheet "video-downloads/<video-id>/original.mp4" --stage analyze --output video-reference
+```
+
+`--retry-preset` 支持 `fast-fail`、`balanced`（默认）和 `reliable`；`--format-profile small` 优先选择较低带宽格式。下载阶段会显示尝试信息，分析产物的 `manifest.json` 会记录阶段耗时。默认的 `--stage all` 仍可一条命令完成。
+
 ## Bilibili HTTP 412
 
 先比对 `where.exe yt-dlp`、`yt-dlp --version`、`python -m pip show yt-dlp` 和 `python -m yt_dlp --version`。常见根因是 PATH 中的旧 `yt-dlp.exe` 与另一 Python 环境中新安装的版本不一致；对齐后再重试一次。禁止使用 BrowserUse、内置浏览器、Computer Use、Cookie、伪造请求头或代理轮换绕过平台控制。

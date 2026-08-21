@@ -22,6 +22,7 @@ def write_reference_package(
     duration_ms: int,
     width: int,
     height: int,
+    timings: dict | None = None,
     overwrite: bool = False,
 ) -> Path:
     if package.exists():
@@ -66,6 +67,8 @@ def write_reference_package(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "artifacts": [entry["file"] for entry in sheet_entries],
     }
+    if timings is not None:
+        manifest["timings"] = timings
     (package / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     (package / "reference.md").write_text(
         "# Video Reference\n\n"

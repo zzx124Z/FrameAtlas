@@ -35,6 +35,15 @@ video-contact-sheet "<local path or yt-dlp URL>" --fps <integer> --rows <integer
 
 Use `--backend ffmpeg` for the optional FFmpeg decoder. Existing output is never overwritten unless the user explicitly requests replacement and `--overwrite` is passed.
 
+For unreliable sources, separate network work from local analysis:
+
+```powershell
+video-contact-sheet "<URL>" --stage download --download-dir video-downloads --retry-preset balanced
+video-contact-sheet "video-downloads/<video-id>/original.mp4" --stage analyze --output video-reference
+```
+
+The default `--stage all` remains available. Use `fast-fail` when you want a quick failure, `balanced` for normal use, and `reliable` when completion is more important than waiting. Use `--format-profile small` to prefer a lower-bandwidth format. The CLI prints download attempts and records download/analysis timing in `manifest.json`.
+
 ## Dependencies
 
 - Python 3.11+

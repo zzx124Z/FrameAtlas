@@ -13,6 +13,8 @@ def test_cli_defaults_to_recommended_sampling_settings(tmp_path: Path):
     assert arguments.columns == 3
     assert arguments.output == Path("video-reference")
     assert arguments.backend == "opencv"
+    assert arguments.stage == "all"
+    assert arguments.retry_preset == "balanced"
 
 
 def test_estimates_number_of_contact_sheets_before_extraction():
