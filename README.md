@@ -25,25 +25,27 @@ AI 可阅读 [AGENTS.md](AGENTS.md) 并执行对应部署步骤，将本 Skill �
 .\tools\install-skill.ps1 -TargetHost all
 ```
 
+其中 `-TargetHost trae` 将 Skill 安装至当前克隆仓库的 `.trae/skills/video-contact-sheet/`；`traeglobal` 安装至 Trae 的 Windows 个人目录；`traecli` 安装至当前仓库的 TraeCode CLI 项目目录；`claude` 与 `opencode` 安装到个人目录。
+
 仅使用当前 Python 环境；如需镜像，请让用户确认可信镜像后仅用于该次安装，不修改全局 pip 配置。
 
 ### 交给 AI 安装
 
-上传 GitHub 后，将下列提示词中的 `<GitHub用户名>` 和分支名替换为实际值，直接发送给 Trae、OpenCode 或 Claude Code。应使用 GitHub Raw 文件地址，而不是 `github.io` 地址：
+将下列提示词直接发送给 Trae、OpenCode 或 Claude Code。应使用 GitHub Raw 文件地址，而不是 `github.io` 地址：
 
 ```text
 请读取并严格按照此文件安装 FrameAtlas Skill：
-https://raw.githubusercontent.com/<GitHub用户名>/FrameAtlas/main/AGENTS.md
+https://raw.githubusercontent.com/zzx124Z/FrameAtlas/main/AGENTS.md
 
 要求：
 1. 先克隆仓库并阅读 AGENTS.md。
 2. 仅按 AGENTS.md 的当前宿主对应目录安装 Skill。
 3. 使用当前 Python 环境安装项目依赖。
-4. 不要使用 BrowserUse、TRAE-browseruse、任何内置浏览器或 Computer Use。
+4. 不要使用任何内置浏览器或 Computer Use。
 5. 安装完成后验证 video-contact-sheet --help，并报告实际安装目录。
 ```
 
-如果默认分支为 `master`，请将链接中的 `main` 替换为 `master`；若仓库名不同，也替换 `FrameAtlas`。
+若后续更改默认分支或仓库名，请同步修改链接。
 
 ## 使用
 

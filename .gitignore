@@ -9,3 +9,5 @@ dist/
 .venv/
 venv/
 video-reference/
+.trae/
+.traecli/

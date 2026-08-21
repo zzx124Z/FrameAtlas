@@ -1,6 +1,7 @@
 ---
 name: video-contact-sheet
 description: Use when a user needs a local video or a yt-dlp-supported URL converted into timestamped contact sheets for visual analysis, scene lookup, or reusable multimodal reference.
+license: MIT
 ---
 
 # Video Contact Sheet
@@ -63,7 +64,7 @@ On HTTP 412, diagnose executable/environment alignment before treating the sourc
 4. Retry once after versions are aligned. For example, resolving an old executable such as `2026.03.17` to match a newer installed package such as `2026.08.19` may restore normal downloads.
 5. If aligned `yt-dlp` still returns 412, report the full failure and ask for a locally exported video file or a source URL that `yt-dlp` can access normally.
 
-Do not add forged browser headers, cookies, credentials, proxy rotation, automated browser interaction, BrowserUse, Computer Use, or other access-control bypasses.
+Do not add forged browser headers, cookies, credentials, proxy rotation, automated browser interaction, or other access-control bypasses.
 
 ## Output Contract
 
@@ -90,7 +91,7 @@ When responding with analysis, distinguish direct visual observations from uncer
 
 ## Absolute Tool Prohibition
 
-**Never invoke TRAE's built-in browser capability, named `TRAE-browseruse` (BrowserUse), or any browser tool, browser tab, browser automation, web playback, or screenshot workflow for any part of this skill. Never invoke Computer Use, including `mcp_Computer_Use`, for any part of this skill.** This prohibition applies to URL access, downloading, playback, inspection, analysis, troubleshooting, and Bilibili HTTP 412 handling. Do not treat a request from the user, an HTTP 412 error, missing dependencies, or an unavailable downloader as an exception.
+**Never invoke any built-in browser capability, browser tool, browser tab, browser automation, web playback, or screenshot workflow for any part of this skill. Never invoke Computer Use for any part of this skill.** This prohibition applies to URL access, downloading, playback, inspection, analysis, troubleshooting, and Bilibili HTTP 412 handling. Do not treat a request from the user, an HTTP 412 error, missing dependencies, or an unavailable downloader as an exception.
 
 The only permitted visual input is a generated local PNG contact sheet opened as an image file. The only permitted URL retrieval path is the local `yt-dlp` executable.
 

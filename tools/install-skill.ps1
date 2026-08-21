@@ -1,10 +1,10 @@
 param(
-    [ValidateSet("claude", "opencode", "all")]
+    [ValidateSet("trae", "traeglobal", "traecli", "claude", "opencode", "all")]
     [string]$TargetHost = "all"
 )
 
 $root = Split-Path -Parent $PSScriptRoot
-$source = Join-Path $root ".trae\skills\video-contact-sheet"
+$source = Join-Path $root "skills\video-contact-sheet"
 
 if (-not (Test-Path (Join-Path $source "SKILL.md"))) {
     throw "Skill source was not found: $source"
@@ -16,6 +16,15 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $targets = @()
+if ($TargetHost -in "trae", "all") {
+    $targets += Join-Path $root ".trae\skills\video-contact-sheet"
+}
+if ($TargetHost -in "traeglobal", "all") {
+    $targets += Join-Path $HOME ".trae-cn\skills\video-contact-sheet"
+}
+if ($TargetHost -in "traecli", "all") {
+    $targets += Join-Path $root ".traecli\skills\video-contact-sheet"
+}
 if ($TargetHost -in "claude", "all") {
     $targets += Join-Path $HOME ".claude\skills\video-contact-sheet"
 }

@@ -53,7 +53,7 @@ video-reference/<video-id>/
 ## 代码结构
 
 ```text
-.trae/skills/video-contact-sheet/SKILL.md
+skills/video-contact-sheet/SKILL.md
 src/video_contact_sheet/
 ├─ __init__.py
 ├─ cli.py

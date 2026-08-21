@@ -48,7 +48,7 @@
 
 ## 任务 5：创建可发布 Skill
 
-**文件：** `.trae/skills/video-contact-sheet/SKILL.md`
+**文件：** `skills/video-contact-sheet/SKILL.md`
 
 1. 写出压力场景：用户没有提供参数、用户提供高密度参数、宿主不支持提问工具。
 2. 编写 Skill，要求提问、默认降级、估算输出数量、合规提示和正确 CLI 调用。

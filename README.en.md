@@ -25,25 +25,27 @@ An AI can read [AGENTS.md](AGENTS.md) and follow its host-specific setup instruc
 .\tools\install-skill.ps1 -TargetHost all
 ```
 
+`-TargetHost trae` installs the Skill into `.trae/skills/video-contact-sheet/` in the current cloned repository; `traeglobal` installs into Trae's Windows personal directory; `traecli` installs into the current repository's TraeCode CLI project directory; `claude` and `opencode` install to personal directories.
+
 Use only the active Python environment. A trusted package mirror requires user approval and applies only to the current installation command.
 
 ### Ask An AI To Install It
 
-After publishing to GitHub, replace `<GitHub-username>` and the branch name below, then send this prompt to Trae, OpenCode, or Claude Code. Use a GitHub Raw URL, not a `github.io` URL:
+Send this prompt directly to Trae, OpenCode, or Claude Code. Use a GitHub Raw URL, not a `github.io` URL:
 
 ```text
 Read this file and install the FrameAtlas Skill exactly as instructed:
-https://raw.githubusercontent.com/<GitHub-username>/FrameAtlas/main/AGENTS.md
+https://raw.githubusercontent.com/zzx124Z/FrameAtlas/main/AGENTS.md
 
 Requirements:
 1. Clone the repository and read AGENTS.md first.
 2. Install the Skill only in the current host's directory specified by AGENTS.md.
 3. Install project dependencies in the active Python environment.
-4. Do not use BrowserUse, TRAE-browseruse, any built-in browser, or Computer Use.
+4. Do not use any built-in browser or Computer Use.
 5. After installation, verify video-contact-sheet --help and report the installed path.
 ```
 
-Replace `main` with `master` when applicable, and replace `FrameAtlas` if you publish under a different repository name.
+Update the URL if the default branch or repository name changes later.
 
 ## Usage
 
