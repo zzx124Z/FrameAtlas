@@ -18,8 +18,8 @@ Convert a video into ordered PNG contact sheets plus a machine-readable referenc
 Before creating sheets, check whether the user supplied all of `fps`, `rows`, and `columns`.
 
 - If all three are supplied, use them without asking again and pass `--parameter-source explicit`.
-- Otherwise, ask how many frames per second to sample and how many cells each sheet should contain. Include the formula and a concrete estimate directly below the question: `sheets = ceil(duration_seconds × fps ÷ (rows × columns))`. For example, for a 10-minute video, the recommended `1 fps` and `3x3` grid creates `ceil(600 × 1 ÷ 9) = 67` images. Substitute the detected duration into this example whenever it is available.
-- If the host cannot ask a question, use `1 fps`, `3x3`, and pass `--parameter-source default`.
+- Otherwise, ask how many frames per second to sample and how many cells each sheet should contain. Include the formula and a concrete estimate directly below the question: `sheets = ceil(duration_seconds × fps ÷ (rows × columns))`. For example, for a 10-minute video, the default `1 fps` and `5x5` grid creates `ceil(600 × 1 ÷ 25) = 24` images. Substitute the detected duration into this example whenever it is available.
+- If the host cannot ask a question, use `1 fps`, `5x5`, and pass `--parameter-source default`.
 - Reject zero, negative, and non-integer values.
 - If duration is known, estimate sheets with `ceil(duration_seconds * fps / (rows * columns))`. Warn before work begins when the estimate exceeds 100; never silently lower user-selected density.
 - Prioritize efficient analysis: use the lowest sampling density that can answer the request, open only time-range-relevant sheets for targeted questions, and avoid generating or loading every sheet before it is necessary.
@@ -27,7 +27,7 @@ Before creating sheets, check whether the user supplied all of `fps`, `rows`, an
 
 ## Run The Tool
 
-The default backend is OpenCV. Use FFmpeg only when the user requests it or OpenCV cannot decode the video.
+The default backend is OpenCV. Use FFmpeg only when the user requests it or OpenCV cannot decode the video. For URL input, default to `--media-mode visual-only`: contact-sheet analysis cannot hear audio, so download only a video stream and avoid unnecessary audio CDN retries and FFmpeg merging. Use `--media-mode complete` only when the user explicitly needs sound or a full audio-plus-video archive.
 
 ```powershell
 video-contact-sheet "<local path or yt-dlp URL>" --fps <integer> --rows <integer> --columns <integer> --output "video-reference" --parameter-source <explicit|default>
@@ -38,11 +38,13 @@ Use `--backend ffmpeg` for the optional FFmpeg decoder. Existing output is never
 For unreliable sources, separate network work from local analysis:
 
 ```powershell
-video-contact-sheet "<URL>" --stage download --download-dir video-downloads --retry-preset balanced
+video-contact-sheet "<URL>" --stage download --download-dir video-downloads --retry-preset balanced --media-mode visual-only
 video-contact-sheet "video-downloads/<video-id>/original.mp4" --stage analyze --output video-reference
 ```
 
-The default `--stage all` remains available. Use `fast-fail` when you want a quick failure, `balanced` for normal use, and `reliable` when completion is more important than waiting. Use `--format-profile small` to prefer a lower-bandwidth format. The CLI prints download attempts and records download/analysis timing in `manifest.json`.
+The default `--stage all` remains available. Use `fast-fail` when you want a quick failure, `balanced` for normal use, and `reliable` when completion is more important than waiting. Use `--format-profile small` to prefer a lower-bandwidth video format. The CLI prints download attempts and records download/analysis timing in `manifest.json`.
+
+For long videos, OpenCV must open the video once and decode requested frames sequentially. Never reopen the file or seek separately for every timestamp: this can stall on H.264 videos. Review whole-video sheets in chronological batches. If a transient model request fails (for example, error `4054`), retain generated local sheets and resume at the next unreviewed batch; never regenerate or redownload solely because the model request failed.
 
 ## Dependencies
 
@@ -77,7 +79,7 @@ Do not add forged browser headers, cookies, credentials, proxy rotation, automat
 
 ## Output Contract
 
-- `source/original.<ext>` preserves the full input video.
+- `source/original.<ext>` stores the selected local media. URL processing defaults to a video-only stream; it stores complete audio-plus-video media only with `--media-mode complete`.
 - Contact-sheet PNGs are stored under `contact-sheets/YYYYMMDD/NNNN/`, where `YYYYMMDD` is the generation date and `NNNN` is the zero-padded batch sequence starting at `0001`. They are ordered row-major: left-to-right, then top-to-bottom.
 - Every populated cell has a frame index and `hh:mm:ss.mmm` timestamp.
 - Empty cells on the final sheet say `END`; they are never duplicates of the last frame.

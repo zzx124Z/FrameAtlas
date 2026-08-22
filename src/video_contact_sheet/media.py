@@ -31,17 +31,28 @@ RETRY_PRESETS = {
 }
 
 
-def build_download_command(url: str, destination: Path, settings: RetrySettings | None = None, format_profile: str = "balanced") -> list[str]:
+def build_download_command(
+    url: str,
+    destination: Path,
+    settings: RetrySettings | None = None,
+    format_profile: str = "balanced",
+    media_mode: str = "visual-only",
+) -> list[str]:
     settings = settings or RETRY_PRESETS["balanced"]
     command = [
         "yt-dlp", "--no-playlist", "--output", str(destination / "original.%(ext)s"),
         "--retries", str(settings.retries), "--fragment-retries", str(settings.fragment_retries),
         "--socket-timeout", str(settings.socket_timeout),
     ]
-    if format_profile == "small":
-        command.extend(["--format", "bv*[height<=720]+ba/b[height<=720]/b"])
-    elif format_profile != "balanced":
+    if media_mode not in {"visual-only", "complete"}:
+        raise ValueError(f"unsupported media mode: {media_mode}")
+    if format_profile not in {"balanced", "small"}:
         raise ValueError(f"unsupported format profile: {format_profile}")
+    if media_mode == "visual-only":
+        format_selector = "bv*[height<=720]/bv*/b[height<=720]/b" if format_profile == "small" else "bv*/b"
+    else:
+        format_selector = "bv*[height<=720]+ba/b[height<=720]/b" if format_profile == "small" else "bv*+ba/b"
+    command.extend(["--format", format_selector])
     command.append(url)
     return command
 
@@ -65,7 +76,13 @@ def require_backend(backend: str) -> None:
     raise MediaToolError(f"unsupported media backend: {backend}")
 
 
-def download_video(url: str, destination: Path, retry_preset: str = "balanced", format_profile: str = "balanced") -> tuple[Path, int, int]:
+def download_video(
+    url: str,
+    destination: Path,
+    retry_preset: str = "balanced",
+    format_profile: str = "balanced",
+    media_mode: str = "visual-only",
+) -> tuple[Path, int, int]:
     require_executable("yt-dlp")
     if retry_preset not in RETRY_PRESETS:
         raise ValueError(f"unsupported retry preset: {retry_preset}")
@@ -76,13 +93,21 @@ def download_video(url: str, destination: Path, retry_preset: str = "balanced", 
     for attempt in range(1, 4):
         for partial in destination.glob("original.*"):
             partial.unlink()
-        print(f"download: attempt {attempt}/3, profile={format_profile}, retries={settings.retries}, fragment-retries={settings.fragment_retries}", flush=True)
-        completed = subprocess.run(build_download_command(url, destination, settings, format_profile), capture_output=True, text=True)
+        print(
+            f"download: attempt {attempt}/3, mode={media_mode}, profile={format_profile}, "
+            f"retries={settings.retries}, fragment-retries={settings.fragment_retries}",
+            flush=True,
+        )
+        completed = subprocess.run(
+            build_download_command(url, destination, settings, format_profile, media_mode),
+            capture_output=True,
+            text=True,
+        )
         files = sorted(destination.glob("original.*"))
         if completed.returncode == 0 and len(files) == 1:
             elapsed_ms = round((time.perf_counter() - started) * 1000)
             (destination / "download-manifest.json").write_text(
-                json.dumps({"input": url, "video": files[0].name, "attempts": attempt, "elapsed_ms": elapsed_ms, "retry_preset": retry_preset, "format_profile": format_profile}, indent=2),
+                json.dumps({"input": url, "video": files[0].name, "attempts": attempt, "elapsed_ms": elapsed_ms, "retry_preset": retry_preset, "format_profile": format_profile, "media_mode": media_mode}, indent=2),
                 encoding="utf-8",
             )
             return files[0], attempt, elapsed_ms
@@ -170,3 +195,39 @@ def extract_frame_opencv(video: Path, timestamp_ms: int, destination: Path) -> N
         capture.release()
     if not success or frame is None or not cv2.imwrite(str(destination), frame):
         raise MediaToolError(f"OpenCV failed at {timestamp_ms}ms")
+
+
+def extract_frames_opencv(video: Path, timestamps_ms: list[int], destination: Path) -> list[Path]:
+    require_backend("opencv")
+    import cv2
+
+    destination.mkdir(parents=True, exist_ok=True)
+    capture = cv2.VideoCapture(str(video))
+    if not capture.isOpened():
+        capture.release()
+        raise MediaToolError(f"OpenCV cannot open video: {video}")
+    paths = []
+    try:
+        source_fps = capture.get(cv2.CAP_PROP_FPS)
+        if source_fps <= 0:
+            raise MediaToolError("OpenCV could not read the source frame rate")
+        target_frames = [round(timestamp_ms * source_fps / 1000) for timestamp_ms in timestamps_ms]
+        target_index = 0
+        frame_index = 0
+        for index, timestamp_ms in enumerate(timestamps_ms):
+            if timestamp_ms < 0:
+                raise ValueError("timestamp_ms must not be negative")
+            path = destination / f"frame-{index:08d}.png"
+            target_frame = target_frames[target_index]
+            while frame_index <= target_frame:
+                success, frame = capture.read()
+                if not success or frame is None:
+                    raise MediaToolError(f"OpenCV failed at {timestamp_ms}ms")
+                frame_index += 1
+            target_index += 1
+            if not success or frame is None or not cv2.imwrite(str(path), frame):
+                raise MediaToolError(f"OpenCV failed at {timestamp_ms}ms")
+            paths.append(path)
+    finally:
+        capture.release()
+    return paths

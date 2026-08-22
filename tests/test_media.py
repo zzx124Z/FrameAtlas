@@ -40,6 +40,18 @@ def test_download_command_contains_network_controls(tmp_path: Path):
     assert "--socket-timeout" in command
 
 
+def test_visual_only_download_avoids_audio_merging(tmp_path: Path):
+    command = build_download_command("https://example.test/video", tmp_path, media_mode="visual-only")
+
+    assert command[command.index("--format") + 1] == "bv*/b"
+
+
+def test_complete_download_selects_audio_and_video(tmp_path: Path):
+    command = build_download_command("https://example.test/video", tmp_path, media_mode="complete")
+
+    assert command[command.index("--format") + 1] == "bv*+ba/b"
+
+
 def test_download_retries_and_writes_manifest(tmp_path: Path, monkeypatch):
     calls = []
 

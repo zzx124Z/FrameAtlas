@@ -9,12 +9,13 @@ def test_cli_defaults_to_recommended_sampling_settings(tmp_path: Path):
     arguments = build_parser().parse_args([str(tmp_path / "video.mp4")])
 
     assert arguments.fps == 1
-    assert arguments.rows == 3
-    assert arguments.columns == 3
+    assert arguments.rows == 5
+    assert arguments.columns == 5
     assert arguments.output == Path("video-reference")
     assert arguments.backend == "opencv"
     assert arguments.stage == "all"
     assert arguments.retry_preset == "balanced"
+    assert arguments.media_mode == "visual-only"
 
 
 def test_estimates_number_of_contact_sheets_before_extraction():

@@ -9,7 +9,8 @@ FrameAtlas converts a local video or an HTTP(S) URL supported by `yt-dlp` into t
 - Uses OpenCV for frame extraction by default, with FFmpeg as an explicit fallback.
 - Orders frames strictly left-to-right, then top-to-bottom; final unused cells show `END`.
 - Preserves each source frame's aspect ratio with letterboxing or pillarboxing; it never stretches, squashes, or crops a frame to fill a cell.
-- Archives the source video and creates `frames.json`, `manifest.json`, and `reference.md`.
+- Downloads and archives only the video stream needed for visual analysis by default; use `--media-mode complete` for audio plus video.
+- Creates `frames.json`, `manifest.json`, and `reference.md` beside the selected media file.
 - Stores sheets in `contact-sheets/YYYYMMDD/NNNN/` for date- and batch-based organization.
 - Lets an AI install or update OpenCV, Pillow, and URL-required `yt-dlp` in the active environment.
 
@@ -50,22 +51,28 @@ Update the URL if the default branch or repository name changes later.
 ## Usage
 
 ```powershell
-video-contact-sheet "C:\media\demo.mp4" --fps 1 --rows 3 --columns 3 --output "video-reference" --parameter-source explicit
-video-contact-sheet "https://example.com/video" --fps 1 --rows 3 --columns 3 --output "video-reference" --parameter-source explicit
+video-contact-sheet "C:\media\demo.mp4" --fps 1 --rows 5 --columns 5 --output "video-reference" --parameter-source explicit
+video-contact-sheet "https://example.com/video" --fps 1 --rows 5 --columns 5 --output "video-reference" --parameter-source explicit
 ```
 
-The defaults are `1 fps` and `3x3`. Sheet count is `ceil(duration_seconds × fps ÷ (rows × columns))`. A 10-minute video at defaults produces `ceil(600 × 1 ÷ 9) = 67` sheets. Use the lowest density that can answer the question and open only time-range-relevant sheets.
+The defaults are `1 fps` and `5x5`. Sheet count is `ceil(duration_seconds × fps ÷ (rows × columns))`. A 10-minute video at defaults produces `ceil(600 × 1 ÷ 25) = 24` sheets. Use the lowest density that can answer the question and open only time-range-relevant sheets.
 
 ### Two-Stage Mode For Unreliable Networks
 
-For sources with separate audio/video streams or unstable CDN connections, download first and analyze locally to avoid repeating network work:
+For sources with separate audio/video streams or unstable CDN connections, download first and analyze locally to avoid repeating network work. The default `visual-only` mode selects just the video stream, so it skips audio that contact-sheet analysis cannot use and avoids FFmpeg merging:
 
 ```powershell
-video-contact-sheet "https://example.com/video" --stage download --download-dir video-downloads --retry-preset balanced
+video-contact-sheet "https://example.com/video" --stage download --download-dir video-downloads --retry-preset balanced --media-mode visual-only
 video-contact-sheet "video-downloads/<video-id>/original.mp4" --stage analyze --output video-reference
 ```
 
-`--retry-preset` supports `fast-fail`, `balanced` (default), and `reliable`; `--format-profile small` prefers a lower-bandwidth format. The download stage prints attempt information, and the analysis `manifest.json` records stage timings. The default `--stage all` remains available.
+`--media-mode complete` selects audio plus video and can require FFmpeg to merge the streams; use it only when sound or a complete archive is needed. `--retry-preset` supports `fast-fail`, `balanced` (default), and `reliable`; `--format-profile small` prefers a video format at or below 720p. The download stage prints attempt information, and the analysis `manifest.json` records stage timings. The default `--stage all` remains available.
+
+### Long-Video Efficiency And Recovery
+
+- OpenCV opens the video once and decodes every target frame in chronological order. Do not reopen the video or seek randomly for each timestamp: some H.264 files become dramatically slower that way.
+- For a whole-video review, inspect all sheets chronologically, but load only a small batch per model request. If a temporary model-request failure occurs (such as `4054`), keep the generated local sheets and resume from the next batch instead of downloading or generating again.
+- At `1 fps` and `5x5`, each sheet covers 25 seconds; a roughly 16-minute video produces about 39 sheets. Use a `3x3` or `2x2` grid for subtitles or corner text rather than guessing from unreadable cells.
 
 ## Bilibili HTTP 412
 

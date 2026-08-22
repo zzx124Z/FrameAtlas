@@ -16,6 +16,7 @@ from .media import (
     download_video,
     extract_frame,
     extract_frame_opencv,
+    extract_frames_opencv,
     probe_video,
     probe_video_opencv,
     require_backend,
@@ -30,8 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Create timestamped video contact sheets for multimodal reference.")
     parser.add_argument("input", help="Local video path or public HTTP(S) URL")
     parser.add_argument("--fps", type=int, default=1, help="Frames per second; default: 1")
-    parser.add_argument("--rows", type=int, default=3, help="Grid rows; default: 3")
-    parser.add_argument("--columns", type=int, default=3, help="Grid columns; default: 3")
+    parser.add_argument("--rows", type=int, default=5, help="Grid rows; default: 5")
+    parser.add_argument("--columns", type=int, default=5, help="Grid columns; default: 5")
     parser.add_argument("--output", type=Path, default=Path("video-reference"), help="Output parent directory")
     parser.add_argument("--overwrite", action="store_true", help="Replace an existing package")
     parser.add_argument("--backend", choices=("opencv", "ffmpeg"), default="opencv", help="Video decoding backend; default: opencv")
@@ -39,7 +40,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--download-dir", type=Path, default=Path("video-downloads"), help="Persistent download directory")
     parser.add_argument("--retry-preset", choices=("fast-fail", "balanced", "reliable"), default="balanced", help="URL download retry profile")
     parser.add_argument("--format-profile", choices=("balanced", "small"), default="balanced", help="URL download format profile")
+    parser.add_argument("--media-mode", choices=("visual-only", "complete"), default="visual-only", help="URL media selection; default: visual-only")
     parser.add_argument("--timing", action="store_true", help="Print stage timings")
+    parser.add_argument("--max-duration", type=int, help="Analyze only the first N seconds")
     parser.add_argument(
         "--parameter-source",
         choices=("explicit", "default"),
@@ -76,6 +79,10 @@ def _run(arguments: argparse.Namespace, config: SamplingConfig) -> int:
         started = time.perf_counter()
         phase_started = time.perf_counter()
         metadata = _probe_video(video, arguments.backend)
+        if arguments.max_duration is not None:
+            if arguments.max_duration <= 0:
+                raise ValueError("max-duration must be positive")
+            metadata = type(metadata)(duration_ms=min(metadata.duration_ms, arguments.max_duration * 1000), width=metadata.width, height=metadata.height)
         probe_ms = round((time.perf_counter() - phase_started) * 1000)
         sheet_count = estimate_sheet_count(metadata.duration_ms, config.fps, config.slots_per_sheet)
         if sheet_count > 100:
@@ -135,7 +142,13 @@ def _resolve_input(value: str, temporary_dir: Path) -> Path:
 def _download_input(arguments: argparse.Namespace, temporary_dir: Path | None = None) -> tuple[Path, int, int]:
     destination = arguments.download_dir / _video_id(arguments.input) if temporary_dir is None else temporary_dir / "download"
     if is_url(arguments.input):
-        return download_video(arguments.input, destination, arguments.retry_preset, arguments.format_profile)
+        return download_video(
+            arguments.input,
+            destination,
+            arguments.retry_preset,
+            arguments.format_profile,
+            arguments.media_mode,
+        )
     return resolve_local_input(arguments.input), 0, 0
 
 
@@ -144,13 +157,17 @@ def _probe_video(video: Path, backend: str):
 
 
 def _extract_frames(video: Path, timestamps: list[int], frames_dir: Path, backend: str) -> list[Image.Image]:
+    if backend == "opencv":
+        frame_paths = extract_frames_opencv(video, timestamps, frames_dir)
+        frames = []
+        for frame_path in frame_paths:
+            with Image.open(frame_path) as image:
+                frames.append(image.copy())
+        return frames
     frames = []
     for index, timestamp_ms in enumerate(timestamps):
         frame_path = frames_dir / f"frame-{index:08d}.png"
-        if backend == "opencv":
-            extract_frame_opencv(video, timestamp_ms, frame_path)
-        else:
-            extract_frame(video, timestamp_ms, frame_path)
+        extract_frame(video, timestamp_ms, frame_path)
         with Image.open(frame_path) as image:
             frames.append(image.copy())
     return frames
